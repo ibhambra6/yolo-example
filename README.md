@@ -6,54 +6,45 @@ A comprehensive, production-ready computer vision suite featuring both simple an
 
 ### 🌍 Cross-Platform Compatibility
 - **Windows, Linux, macOS** support with unified codebase
-- **Automated setup** with platform detection
-- **Interactive launcher** for all applications
-- **Virtual environment** management
-- **Path handling** with cross-platform file operations
-- **Colored terminal** output with fallback support
+- **Automated setup** with platform detection and virtual environment management
+- **Interactive launcher** for all applications with unified entry point
+- **Activation scripts** for easy environment management
 
 ### 🐕🐱 Simple Dog/Cat Classifier (`dog_cat_yolo_gui.py`)
-- **Beginner-friendly** Tkinter GUI with modern styling
+- **Beginner-friendly** simplified GUI with modern styling
 - **Pre-trained** YOLOv5 model with COCO weights
-- **One-click** image classification
-- **Real-time** predictions with confidence scoring
+- **One-click** image classification with confidence scoring
 - **Perfect for learning** computer vision fundamentals
-- **Automatic model management** and caching
 
 ### 🎯 Generic YOLO Classifier (`generic_yolo_classifier.py`)
-- **Fully configurable** for any objects/classes
-- **YAML-based** configuration system
+- **Fully configurable** for any objects/classes via YAML configuration
 - **Custom model** support with automatic loading
-- **Batch processing** with progress tracking
-- **Integrated training** capabilities
-- **Professional GUI** with advanced features
-- **Export functionality** (CSV, JSON, reports)
-- **Real-time monitoring** and statistics
+- **Batch processing** with progress tracking and CSV export
+- **Professional GUI** with advanced features and real-time monitoring
 
-### 🚀 Streamlined Training Pipeline (`train_model.py`)
+### 🚀 Training Pipeline (`train_model.py`)
 - **Interactive training** wizard for beginners
 - **Command-line interface** for automation
-- **Automatic dataset** preparation and validation
-- **Configuration generation** with best practices
-- **Real-time progress** monitoring
-- **Multiple model sizes** support (YOLOv5s/m/l/x)
-- **Error handling** and recovery
+- **Automatic dataset** preparation and configuration generation
+- **Real-time progress** monitoring with error handling
 
 ### ⚙️ Configuration Generator (`create_config.py`)
 - **Interactive wizard** for easy setup
 - **Template generation** for common use cases
 - **Parameter validation** and optimization
-- **Integration** with existing models
 
 ## 🚀 Quick Start
 
 ### Option 1: Automated Setup (Recommended)
 ```bash
-# Cross-platform setup (Windows, Linux, macOS)
+# Interactive setup with guided wizard
 python setup.py
 
-# Or quick setup with defaults
+# Quick setup with defaults
 python setup.py --quick
+
+# Check existing installation
+python setup.py --check
 ```
 
 ### Option 2: Interactive Launcher
@@ -68,70 +59,77 @@ python run.py --app train       # Training wizard
 python run.py --app config      # Configuration creator
 ```
 
-### Option 3: Manual Setup
-```bash
-# Create virtual environment
-python -m venv yolo_env
+### Option 3: Environment Activation
+After running setup, you can use the generated activation script:
 
-# Activate environment
-# Windows:
-yolo_env\Scripts\activate
-# Linux/macOS:
-source yolo_env/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run applications
-python dog_cat_yolo_gui.py
-python train_model.py --interactive
+**Windows:**
+```cmd
+activate.bat
 ```
+
+**Linux/macOS:**
+```bash
+./activate.sh
+```
+
+This activates the virtual environment and provides helpful commands.
 
 ## 📁 Project Structure
 
 ```
 yolo-example/
 ├── 📄 Core Applications
-│   ├── dog_cat_yolo_gui.py      # Simple dog/cat classifier (beginner-friendly)
-│   ├── generic_yolo_classifier.py  # Advanced configurable classifier
-│   ├── train_model.py           # Complete training pipeline
-│   └── create_config.py         # Configuration file generator
+│   ├── dog_cat_yolo_gui.py          # Simple dog/cat classifier
+│   ├── generic_yolo_classifier.py   # Advanced configurable classifier
+│   ├── train_model.py               # Complete training pipeline
+│   └── create_config.py             # Configuration file generator
 │
-├── 📁 configs/                  # Configuration files for different classifiers
-│   ├── vehicle_classifier.yaml # Pre-configured vehicle detection
-│   ├── food_classifier.yaml    # Pre-configured food classification
-│   └── custom_objects.yaml     # Template for custom objects
+├── 📄 Setup & Launcher
+│   ├── setup.py                     # Cross-platform setup script
+│   ├── run.py                       # Unified application launcher
+│   ├── activate.sh / activate.bat   # Environment activation (auto-generated)
+│   └── requirements.txt             # Dependencies
 │
-├── 📄 setup.py                  # Cross-platform setup script
-├── 📄 run.py                    # Unified application launcher
+├── 📁 Configuration & Data
+│   ├── configs/                     # YAML configuration files
+│   ├── models/                      # Pre-trained model weights
+│   ├── test_images/                 # Sample images for testing
+│   └── utils/                       # Utility modules
 │
-├── 📁 utils/                    # Utility modules and helper functions
-├── 📁 models/                   # Pre-trained model weights
-├── 📁 test_images/              # Sample images for testing
-├── 📁 docs/                     # Comprehensive documentation
-└── 📁 datasets/, runs/, tests/  # Auto-created during use
+└── 📁 Auto-Generated
+    ├── datasets/                    # Training datasets
+    ├── runs/                        # Training outputs
+    ├── yolo_env/                    # Virtual environment
+    └── docs/                        # Documentation
 ```
 
-## 🎯 Use Cases
+## 🎯 Use Cases & Examples
 
-### Medical Imaging
+### Quick Classification
 ```bash
-python train_model.py --dataset_path medical_scans --project_name medical_ai --classes "normal,abnormal,critical"
+# Simple dog/cat classification
+python run.py --app dog_cat
+
+# Multi-class object detection
+python run.py --app generic
 ```
 
-### Quality Control
+### Custom Training
 ```bash
-python train_model.py --dataset_path factory_parts --project_name qc_inspector --classes "pass,fail,review"
+# Interactive training wizard
+python run.py --app train
+
+# Command line training
+python train_model.py --dataset_path data --project_name my_classifier --classes "cat,dog,bird"
 ```
 
-### Security Monitoring
+### Specialized Applications
 ```bash
-python train_model.py --dataset_path security_footage --project_name security_ai --classes "person,vehicle,animal,clear"
-```
+# Vehicle detection
+python generic_yolo_classifier.py --config configs/vehicle_classifier.yaml
 
-### Wildlife Monitoring
-```bash
-python train_model.py --dataset_path wildlife_cameras --project_name wildlife_detector --classes "deer,bear,wolf,empty"
+# Food classification
+python generic_yolo_classifier.py --config configs/food_classifier.yaml
 ```
 
 ## 📋 Installation
@@ -140,26 +138,26 @@ python train_model.py --dataset_path wildlife_cameras --project_name wildlife_de
 - Python 3.8+ (3.9+ recommended)
 - pip package manager
 - 4GB+ RAM (8GB+ recommended for training)
-- GPU support optional but recommended for training
 
-### Automated Setup (All Platforms)
+### Automated Installation
 ```bash
-# Interactive setup wizard
-python setup.py
-
-# Quick setup with defaults
-python setup.py --quick
-
-# Check existing installation
-python setup.py --check
-```
-
-### Manual Installation
-```bash
-# Clone the repository
-git clone <repository-url>
+# Clone or download the project
 cd yolo-example
 
+# Run setup (handles everything automatically)
+python setup.py
+```
+
+The setup script will:
+- ✅ Check Python version compatibility
+- ✅ Create virtual environment (`yolo_env/`)
+- ✅ Install all dependencies
+- ✅ Download model weights
+- ✅ Create activation scripts
+- ✅ Validate installation
+
+### Manual Installation (Advanced Users)
+```bash
 # Create virtual environment
 python -m venv yolo_env
 
@@ -179,18 +177,15 @@ python run.py --check
 ### Platform-Specific Notes
 
 **Windows:**
-- Ensure Python is added to PATH
 - Use `python` command (not `python3`)
-- Virtual environment activation: `yolo_env\Scripts\activate`
+- Virtual environment: `yolo_env\Scripts\activate`
+- Activation script: `activate.bat`
 
 **Linux/macOS:**
 - May need `python3` instead of `python`
-- Virtual environment activation: `source yolo_env/bin/activate`
-- On some systems, install `python3-venv`: `sudo apt install python3-venv`
-
-**macOS:**
-- Install Xcode Command Line Tools: `xcode-select --install`
-- Consider using Homebrew for Python: `brew install python`
+- Virtual environment: `source yolo_env/bin/activate`
+- Activation script: `./activate.sh`
+- On some systems: `sudo apt install python3-venv`
 
 ## 🔧 Configuration
 
@@ -208,7 +203,6 @@ python create_config.py --name my_classifier --classes "cat,dog,bird" --weights 
 model:
   weights: runs/train/my_classifier/weights/best.pt
   confidence_threshold: 0.5
-  iou_threshold: 0.45
 
 classes:
   - cat
@@ -218,7 +212,6 @@ classes:
 gui:
   title: My Custom Classifier
   window_size: [800, 600]
-  theme: modern
 
 metadata:
   description: Custom animal classifier
@@ -234,7 +227,7 @@ python train_model.py --interactive
 
 Follow the step-by-step wizard:
 1. Enter project name and description
-2. Choose dataset option (existing, annotation needed, or sample)
+2. Choose dataset option
 3. Define class names
 4. Set training parameters
 5. Start training and monitor progress
@@ -264,19 +257,18 @@ dataset/
     └── labels/     # Test labels
 ```
 
-## 📊 Monitoring and Results
+## 📊 Results & Monitoring
 
 ### Training Outputs
 After training, you'll find:
 - **Model weights**: `runs/train/{project_name}/weights/best.pt`
 - **Training metrics**: `runs/train/{project_name}/results.png`
-- **Confusion matrix**: `runs/train/{project_name}/confusion_matrix.png`
 - **Configuration file**: `configs/{project_name}_classifier.yaml`
 
 ### Testing Your Model
 ```bash
-# Use the quick launcher
-./scripts/run_generic.sh
+# Use the unified launcher
+python run.py --app generic
 
 # Or run directly
 python generic_yolo_classifier.py --config configs/my_classifier_classifier.yaml
@@ -286,39 +278,37 @@ python generic_yolo_classifier.py --config configs/my_classifier_classifier.yaml
 
 ### Common Issues
 
-**Out of Memory Error**
+**Environment Issues**
 ```bash
-# Reduce batch size
-python train_model.py --batch_size 8
+# Check installation
+python setup.py --check
+
+# Recreate environment
+python setup.py --quick
 ```
 
-**Poor Accuracy**
-- Check label quality and consistency
-- Increase training data (1000+ images per class recommended)
-- Use more epochs (200-500)
-- Balance your dataset
+**Model Loading Errors**
+- Ensure virtual environment is activated
+- Check that model weights exist
+- Verify YAML configuration syntax
+- If missing cv2: `pip install opencv-python`
 
-**Model Not Loading**
-- Check file paths in configuration
-- Ensure model weights exist
-- Verify YAML syntax
-
-**Training Too Slow**
-- Use GPU if available
-- Reduce image size (416 instead of 640)
-- Use smaller model (YOLOv5s)
+**Training Issues**
+- Check dataset format and paths
+- Ensure sufficient disk space
+- Reduce batch size if out of memory
 
 ### Getting Help
-1. Check the comprehensive guides in `docs/`
+1. Check environment with `python run.py --check`
 2. Review training logs in `runs/train/`
-3. Start with interactive mode for guidance
+3. Use interactive mode for guidance
 4. Test with sample datasets first
 
 ## 📚 Documentation
 
-- **[Cross-Platform Guide](CROSS_PLATFORM_GUIDE.md)** - Windows, Linux, macOS support
 - **[Training Guide](docs/TRAINING_GUIDE.md)** - Comprehensive training documentation
 - **[Project Structure](docs/PROJECT_STRUCTURE.md)** - Detailed project organization
+- **[Cross-Platform Guide](CROSS_PLATFORM_GUIDE.md)** - Platform-specific usage
 
 ## 🤝 Contributing
 
@@ -337,7 +327,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [YOLOv5](https://github.com/ultralytics/yolov5) by Ultralytics
 - [PyTorch](https://pytorch.org/) for deep learning framework
-- [Tkinter](https://docs.python.org/3/library/tkinter.html) for GUI development
+- [COCO Dataset](https://cocodataset.org/) for pre-trained models
 
 ## 🎯 What's Next?
 
@@ -345,8 +335,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **API Integration**: RESTful API for programmatic access
 - **Mobile App**: React Native or Flutter mobile version
 - **Cloud Training**: Integration with cloud training services
-- **Model Zoo**: Pre-trained models for common use cases
 
 ---
 
-**Ready to get started?** Run `./scripts/quick_train.sh` for the complete workflow or `python dog_cat_yolo_gui.py` for a quick demo!
+**Ready to get started?** Run `python setup.py` for automated setup or `python run.py` to launch the application!

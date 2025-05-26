@@ -184,4 +184,8 @@ logs/
 .cache/
 cache/ 
 
+# Keep activation scripts (useful for users)
+!activate.sh
+!activate.bat
+
 test_images/
