@@ -1,0 +1,18 @@
+model:
+  weights: "path/to/your/custom_model.pt"  # Path to your trained model
+  confidence_threshold: 0.4
+  image_size: 640
+
+classes:
+  names: ["class1", "class2", "class3"]  # Replace with your actual class names
+  colors: ["#FF6B6B", "#4ECDC4", "#45B7D1"]  # One color per class
+
+gui:
+  title: "Custom Object Classifier"
+  window_size: "800x900"
+  max_image_size: [600, 500]
+
+training:
+  epochs: 50
+  batch_size: 16
+  image_size: 640 

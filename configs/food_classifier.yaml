@@ -1,0 +1,18 @@
+model:
+  weights: "yolov5m"  # Medium model for better accuracy on food items
+  confidence_threshold: 0.25
+  image_size: 640
+
+classes:
+  names: ["pizza", "burger", "sandwich", "hot dog", "cake", "donut", "apple", "banana", "orange", "broccoli", "carrot"]
+  colors: ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F", "#FFB6C1", "#90EE90", "#FFA500"]
+
+gui:
+  title: "Food Item Classifier"
+  window_size: "850x950"
+  max_image_size: [650, 550]
+
+training:
+  epochs: 75
+  batch_size: 12  # Smaller batch for food images which can be larger
+  image_size: 640 
