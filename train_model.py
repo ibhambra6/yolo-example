@@ -25,7 +25,7 @@ Usage:
         python train_model.py --dataset_path data --project_name animals --classes "cat,dog,bird" --epochs 100
 
 Author: YOLO Classifier Project
-License: MIT
+License: Proprietary - Oceaneering International Inc. Use Only
 """
 
 # Standard library imports

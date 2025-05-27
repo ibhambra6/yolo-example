@@ -25,7 +25,7 @@ Requirements:
     - Pillow
 
 Author: YOLO Classifier Project
-License: MIT
+License: Proprietary - Oceaneering International Inc. Use Only
 """
 
 from __future__ import annotations

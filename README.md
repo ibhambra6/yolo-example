@@ -321,7 +321,7 @@ python setup.py --quick
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is proprietary software licensed exclusively for Oceaneering International Inc. use only. All other use, modification, or distribution is prohibited. See the [LICENSE](LICENSE) file for complete terms and restrictions.
 
 ## 🙏 Acknowledgments
 

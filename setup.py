@@ -22,7 +22,7 @@ Usage:
     python setup.py --check           # Check existing installation
 
 Author: YOLO Classifier Project
-License: MIT
+License: Proprietary - Oceaneering International Inc. Use Only
 """
 
 import sys

@@ -25,7 +25,7 @@ Usage:
         python create_config.py --name animals --classes "cat,dog" --weights models/animals.pt
 
 Author: YOLO Classifier Project
-License: MIT
+License: Proprietary - Oceaneering International Inc. Use Only
 """
 
 # Standard library imports

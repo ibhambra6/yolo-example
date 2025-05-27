@@ -22,7 +22,7 @@ Usage:
     python run.py --app config         # Launch config creator
 
 Author: YOLO Classifier Project
-License: MIT
+License: Proprietary - Oceaneering International Inc. Use Only
 """
 
 import sys
