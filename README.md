@@ -310,15 +310,6 @@ python setup.py --quick
 - **[Project Structure](docs/PROJECT_STRUCTURE.md)** - Detailed project organization
 - **[Cross-Platform Guide](CROSS_PLATFORM_GUIDE.md)** - Platform-specific usage
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with proper comments
-4. Add tests for new functionality
-5. Update documentation
-6. Submit a pull request
-
 ## 📄 License
 
 This project is proprietary software licensed exclusively for Oceaneering International Inc. use only. All other use, modification, or distribution is prohibited. See the [LICENSE](LICENSE) file for complete terms and restrictions.
