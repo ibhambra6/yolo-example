@@ -181,19 +181,52 @@ def install_dependencies() -> bool:
         return False
     
     pip_path = get_venv_pip()
+    python_path = get_venv_python()
     
+    # Try to upgrade pip first
+    pip_upgrade_success = False
     try:
-        # Upgrade pip first
-        subprocess.run([pip_path, "install", "--upgrade", "pip"], check=True)
+        print("📦 Upgrading pip...")
+        if platform.system() == "Windows":
+            # Use python -m pip install --upgrade pip for Windows
+            subprocess.run([python_path, "-m", "pip", "install", "--upgrade", "pip"], check=True)
+        else:
+            # Use direct pip call for other platforms
+            subprocess.run([pip_path, "install", "--upgrade", "pip"], check=True)
         print_success("pip upgraded successfully")
+        pip_upgrade_success = True
         
-        # Install requirements
+    except subprocess.CalledProcessError as e:
+        print_warning(f"pip upgrade failed: {e}")
+        print_warning("Continuing with existing pip version...")
+        
+        # On Windows, sometimes we need to try alternative methods
+        if platform.system() == "Windows":
+            try:
+                print("🔄 Trying alternative pip upgrade method...")
+                subprocess.run([python_path, "-m", "pip", "install", "--upgrade", "--force-reinstall", "pip"], check=True)
+                print_success("pip upgraded successfully (alternative method)")
+                pip_upgrade_success = True
+            except subprocess.CalledProcessError:
+                print_warning("Alternative pip upgrade also failed, continuing with existing pip...")
+    
+    except Exception as e:
+        print_warning(f"Unexpected error upgrading pip: {e}")
+        print_warning("Continuing with existing pip version...")
+    
+    # Install requirements
+    try:
+        print("📦 Installing requirements...")
         subprocess.run([pip_path, "install", "-r", REQUIREMENTS_FILE], check=True)
         print_success("Dependencies installed successfully")
         return True
         
     except subprocess.CalledProcessError as e:
         print_error(f"Failed to install dependencies: {e}")
+        print_error("Try the following manual steps:")
+        print_error(f"1. Activate virtual environment: {VENV_NAME}\\Scripts\\activate.bat")
+        print_error(f"2. Upgrade pip manually: python -m pip install --upgrade pip")
+        print_error(f"3. Install requirements: pip install -r {REQUIREMENTS_FILE}")
         return False
     except Exception as e:
         print_error(f"Unexpected error installing dependencies: {e}")
