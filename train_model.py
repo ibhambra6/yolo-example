@@ -35,6 +35,7 @@ import subprocess
 import json
 from pathlib import Path
 from datetime import datetime
+import os
 
 # Third-party imports
 import yaml
@@ -153,23 +154,39 @@ def create_dataset_yaml(dataset_path: str, classes: list, project_name: str) -> 
         ├── test/images/
         └── test/labels/
     """
+    # Ensure dataset path exists
+    dataset_path = Path(dataset_path)
+    dataset_path.mkdir(parents=True, exist_ok=True)
+    
     # Create the dataset configuration dictionary
     dataset_config = {
-        'path': os.path.abspath(dataset_path),  # Absolute path to dataset
-        'train': 'train/images',                # Relative path to training images
-        'val': 'val/images',                   # Relative path to validation images
-        'test': 'test/images',                 # Relative path to test images
-        'nc': len(classes),                    # Number of classes
-        'names': classes                       # Class names list
+        'path': str(dataset_path.resolve()),   # Absolute path to dataset
+        'train': 'train/images',               # Relative path to training images
+        'val': 'val/images',                  # Relative path to validation images
+        'test': 'test/images',                # Relative path to test images
+        'nc': len(classes),                   # Number of classes
+        'names': classes                      # Class names list
     }
     
     # Write the dataset configuration to YAML file
-    yaml_path = Path(dataset_path) / "dataset.yaml"
-    with open(yaml_path, 'w') as f:
-        yaml.dump(dataset_config, f, default_flow_style=False)
-    
-    print(f"✅ Dataset YAML created: {yaml_path}")
-    return str(yaml_path)
+    yaml_path = dataset_path / "dataset.yaml"
+    try:
+        with open(yaml_path, 'w') as f:
+            yaml.dump(dataset_config, f, default_flow_style=False, indent=2)
+        
+        print(f"✅ Dataset YAML created: {yaml_path}")
+        
+        # Verify the file was created correctly
+        with open(yaml_path, 'r') as f:
+            verify_config = yaml.safe_load(f)
+            if 'path' not in verify_config:
+                raise ValueError("Failed to write 'path' key to dataset YAML")
+        
+        return str(yaml_path)
+        
+    except Exception as e:
+        print(f"❌ Error creating dataset YAML: {e}")
+        raise
 
 def train_yolo_model(dataset_yaml: str, project_name: str, epochs: int = DEFAULT_EPOCHS, 
                      batch_size: int = DEFAULT_BATCH_SIZE, img_size: int = DEFAULT_IMAGE_SIZE) -> str:
@@ -337,6 +354,26 @@ def create_sample_dataset(project_name):
         (dataset_path / split / "images").mkdir(parents=True, exist_ok=True)
         (dataset_path / split / "labels").mkdir(parents=True, exist_ok=True)
     
+    # Create a placeholder image and label for testing
+    try:
+        import numpy as np
+        from PIL import Image
+        
+        # Create a simple test image
+        test_image = Image.fromarray(np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8))
+        test_image.save(dataset_path / "train" / "images" / "test_image.jpg")
+        
+        # Create a simple test label
+        with open(dataset_path / "train" / "labels" / "test_image.txt", 'w') as f:
+            f.write("0 0.5 0.5 0.3 0.3\n")  # class_id center_x center_y width height
+        
+        print(f"📸 Created test image and label for validation")
+        
+    except ImportError:
+        print("⚠️ Could not create test image (PIL/numpy not available)")
+    except Exception as e:
+        print(f"⚠️ Could not create test image: {e}")
+    
     # Create README
     readme_content = f"""# {project_name} Dataset
 
@@ -379,20 +416,42 @@ Where all coordinates are normalized (0-1).
 def train_workflow(dataset_path, classes, project_name, description, epochs=100, batch_size=16):
     """Complete training workflow."""
     try:
-        # Step 1: Create dataset YAML
+        print(f"🚀 Starting training workflow for {project_name}")
+        print(f"📁 Dataset path: {dataset_path}")
+        print(f"📋 Classes: {classes}")
+        
+        # Step 1: Verify dataset path exists
+        if not Path(dataset_path).exists():
+            print(f"❌ Dataset path does not exist: {dataset_path}")
+            return False
+        
+        # Step 2: Create dataset YAML
+        print(f"\n📄 Creating dataset configuration...")
         dataset_yaml = create_dataset_yaml(dataset_path, classes, project_name)
         
-        # Step 2: Train model
+        # Step 3: Validate dataset structure before training
+        print(f"\n🔍 Validating dataset structure...")
+        try:
+            from generic_yolo_classifier import DatasetManager
+            if not DatasetManager.validate_dataset(dataset_yaml):
+                print("❌ Dataset validation failed. Please check your dataset structure.")
+                return False
+        except ImportError:
+            print("⚠️ Could not import validation function, skipping validation")
+        
+        # Step 4: Train model
+        print(f"\n🚂 Starting model training...")
         weights_path = train_yolo_model(dataset_yaml, project_name, epochs, batch_size)
         
         if not weights_path:
             print("❌ Training failed")
             return False
         
-        # Step 3: Create configuration file
+        # Step 5: Create configuration file
+        print(f"\n⚙️ Creating configuration file...")
         config_path = create_config_file(project_name, classes, weights_path, description)
         
-        # Step 4: Test the model
+        # Step 6: Success summary
         print(f"\n🎉 Training Complete!")
         print(f"📁 Model weights: {weights_path}")
         print(f"⚙️ Configuration: {config_path}")
@@ -403,6 +462,8 @@ def train_workflow(dataset_path, classes, project_name, description, epochs=100,
         
     except Exception as e:
         print(f"❌ Error during training workflow: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def main():

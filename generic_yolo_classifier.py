@@ -30,6 +30,7 @@ $ python -m yolov5 train \
 from __future__ import annotations
 
 import sys
+import os
 import json
 import yaml
 import argparse
@@ -129,21 +130,69 @@ def train_model(data_yaml: str, config: ConfigManager, output_dir: str = "runs/t
     training_config = config.config["training"]
     model_config = config.config["model"]
     
+    # Determine the weights to use
+    weights = model_config["weights"]
+    
+    # If using a model name (like "yolov5s"), add .pt extension
+    if weights in ["yolov5s", "yolov5m", "yolov5l", "yolov5x"]:
+        weights = f"{weights}.pt"
+    
     cmd = [
         sys.executable,
         "-m",
         "yolov5.train",
-        "--img", str(training_config["image_size"]),
-        "--batch", str(training_config["batch_size"]),
-        "--epochs", str(training_config["epochs"]),
         "--data", data_yaml,
-        "--weights", model_config["weights"],
+        "--weights", weights,
+        "--epochs", str(training_config["epochs"]),
+        "--batch-size", str(training_config["batch_size"]),
+        "--img", str(training_config["image_size"]),
         "--project", output_dir,
-        "--name", "custom_classifier"
+        "--name", "custom_classifier",
+        "--cache",  # Cache images for faster training
+        "--save-period", "10",  # Save checkpoint every 10 epochs
+        "--patience", "20"  # Early stopping patience
     ]
     
-    print(f"Starting training with command: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True)
+    print(f"🚀 Starting YOLOv5 training...")
+    print(f"📊 Parameters: {training_config['epochs']} epochs, batch size {training_config['batch_size']}")
+    print(f"🔧 Command: {' '.join(cmd)}")
+    
+    try:
+        # Run training with real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Print output in real-time
+        for line in process.stdout:
+            print(line.rstrip())
+        
+        # Wait for completion
+        process.wait()
+        
+        if process.returncode == 0:
+            print("✅ Training completed successfully!")
+            
+            # Check for output weights
+            weights_path = Path(output_dir) / "custom_classifier" / "weights" / "best.pt"
+            if weights_path.exists():
+                print(f"📁 Best weights saved: {weights_path}")
+                return str(weights_path)
+            else:
+                print("⚠️ Training completed but best weights not found")
+                return True
+        else:
+            print(f"❌ Training failed with exit code: {process.returncode}")
+            raise RuntimeError(f"Training failed with exit code: {process.returncode}")
+            
+    except Exception as e:
+        print(f"❌ Error during training: {e}")
+        raise
 
 def predict(image_path: str | Path, config: ConfigManager) -> Tuple[str, float, List[Dict]]:
     """Return prediction, confidence, and all detections for the supplied image."""
@@ -216,34 +265,154 @@ class DatasetManager:
         return str(yaml_path)
     
     @staticmethod
+    def fix_roboflow_dataset_yaml(yaml_path: str) -> str:
+        """
+        Fix Roboflow dataset YAML to be compatible with YOLOv5 training.
+        
+        Roboflow datasets often have relative paths and missing 'path' key.
+        This function converts them to the expected format.
+        """
+        try:
+            with open(yaml_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Get the directory containing the YAML file
+            yaml_dir = Path(yaml_path).parent.resolve()
+            
+            # Add missing 'path' key if not present
+            if 'path' not in config:
+                config['path'] = str(yaml_dir)
+                print(f"✅ Added missing 'path' key: {yaml_dir}")
+            
+            # Convert relative paths for Roboflow datasets
+            for key in ['train', 'val', 'test']:
+                if key in config and isinstance(config[key], str):
+                    original_path = config[key]
+                    
+                    if original_path.startswith('../'):
+                        # For Roboflow datasets, the paths are relative to the parent directory
+                        # but the actual data is usually in the same directory as the YAML
+                        
+                        # Extract the folder name (e.g., 'train/images' from '../train/images')
+                        folder_name = original_path.replace('../', '')
+                        
+                        # Check if the folder exists in the same directory as the YAML
+                        local_path = yaml_dir / folder_name
+                        if local_path.exists():
+                            config[key] = folder_name
+                            print(f"✅ Fixed {key} path: {folder_name} (found locally)")
+                        else:
+                            # Try to resolve the original relative path
+                            abs_path = (yaml_dir / original_path).resolve()
+                            if abs_path.exists():
+                                try:
+                                    rel_path = abs_path.relative_to(Path(config['path']))
+                                    config[key] = str(rel_path)
+                                    print(f"✅ Fixed {key} path: {rel_path}")
+                                except ValueError:
+                                    config[key] = str(abs_path)
+                                    print(f"✅ Using absolute {key} path: {abs_path}")
+                            else:
+                                print(f"⚠️ Warning: {key} path not found: {original_path}")
+                    else:
+                        # Path doesn't start with '../', check if it exists
+                        check_path = yaml_dir / original_path
+                        if check_path.exists():
+                            print(f"✅ {key} path verified: {original_path}")
+                        else:
+                            print(f"⚠️ Warning: {key} path not found: {original_path}")
+            
+            # Create a fixed version of the YAML file
+            fixed_yaml_path = yaml_dir / "dataset_fixed.yaml"
+            with open(fixed_yaml_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, indent=2)
+            
+            print(f"✅ Created fixed dataset YAML: {fixed_yaml_path}")
+            return str(fixed_yaml_path)
+            
+        except Exception as e:
+            print(f"❌ Error fixing Roboflow dataset YAML: {e}")
+            raise
+    
+    @staticmethod
     def validate_dataset(dataset_yaml: str) -> bool:
         """Validate that the dataset structure is correct."""
         try:
+            if not os.path.exists(dataset_yaml):
+                print(f"Dataset YAML file does not exist: {dataset_yaml}")
+                return False
+            
             with open(dataset_yaml, 'r') as f:
                 config = yaml.safe_load(f)
             
+            if config is None:
+                print(f"Dataset YAML file is empty or invalid: {dataset_yaml}")
+                return False
+            
+            print(f"🔍 Validating dataset config: {dataset_yaml}")
+            print(f"📋 Config keys found: {list(config.keys())}")
+            
+            # Check if this is a Roboflow dataset that needs fixing
+            needs_fixing = 'path' not in config or (
+                'path' in config and any(
+                    isinstance(config.get(key), str) and config[key].startswith('../')
+                    for key in ['train', 'val', 'test']
+                    if key in config
+                )
+            )
+            
+            if needs_fixing and not dataset_yaml.endswith('_fixed.yaml'):
+                print(f"🤖 Detected Roboflow dataset format that needs fixing")
+                print(f"🔧 Attempting to fix dataset configuration...")
+                
+                try:
+                    fixed_yaml_path = DatasetManager.fix_roboflow_dataset_yaml(dataset_yaml)
+                    print(f"✅ Dataset fixed! Using: {fixed_yaml_path}")
+                    
+                    # Recursively validate the fixed dataset
+                    return DatasetManager.validate_dataset(fixed_yaml_path)
+                    
+                except Exception as e:
+                    print(f"❌ Failed to fix Roboflow dataset: {e}")
+                    return False
+            
             required_keys = ["path", "train", "val", "nc", "names"]
+            missing_keys = []
+            
             for key in required_keys:
                 if key not in config:
-                    print(f"Missing required key in dataset config: {key}")
-                    return False
+                    missing_keys.append(key)
+            
+            if missing_keys:
+                print(f"❌ Missing required keys in dataset config: {missing_keys}")
+                print(f"📄 Current config content:")
+                for key, value in config.items():
+                    print(f"   {key}: {value}")
+                return False
             
             dataset_path = Path(config["path"])
             train_path = dataset_path / config["train"]
             val_path = dataset_path / config["val"]
             
+            print(f"📁 Dataset path: {dataset_path}")
+            print(f"🚂 Train path: {train_path}")
+            print(f"✅ Val path: {val_path}")
+            
             if not train_path.exists():
-                print(f"Training path does not exist: {train_path}")
+                print(f"❌ Training path does not exist: {train_path}")
                 return False
             
             if not val_path.exists():
-                print(f"Validation path does not exist: {val_path}")
+                print(f"❌ Validation path does not exist: {val_path}")
                 return False
             
+            print(f"✅ Dataset validation passed!")
             return True
             
         except Exception as e:
-            print(f"Error validating dataset: {e}")
+            print(f"❌ Error validating dataset: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 # ----------------------------------------------------------------------------
@@ -524,6 +693,21 @@ class GenericClassifierApp(tk.Tk):
         dataset_yaml = self.dataset_var.get()
         if not dataset_yaml:
             messagebox.showerror("Error", "Please select a dataset YAML file.")
+            return
+        
+        # Check if dataset is valid and get the correct YAML path
+        try:
+            with open(dataset_yaml, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # If it's a Roboflow dataset, fix it first
+            if 'roboflow' in config or 'path' not in config:
+                print("🤖 Detected Roboflow dataset, fixing configuration...")
+                fixed_yaml = DatasetManager.fix_roboflow_dataset_yaml(dataset_yaml)
+                dataset_yaml = fixed_yaml  # Use the fixed version for training
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read dataset configuration:\n{e}")
             return
         
         if not DatasetManager.validate_dataset(dataset_yaml):

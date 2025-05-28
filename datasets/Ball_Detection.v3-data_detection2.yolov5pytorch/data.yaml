@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['blue ball', 'green ball', 'gren', 'red and blue ball', 'red ball']
+
+roboflow:
+  workspace: objectdetection-dsy2y
+  project: ball_detection-qei8i
+  version: 3
+  license: MIT
+  url: https://universe.roboflow.com/objectdetection-dsy2y/ball_detection-qei8i/dataset/3

@@ -1,0 +1,17 @@
+names:
+- blue ball
+- green ball
+- gren
+- red and blue ball
+- red ball
+nc: 5
+path: /Users/ibhambra/Documents/Documents-Ishaan/yolo-example/datasets/Ball_Detection.v3-data_detection2.yolov5pytorch
+roboflow:
+  license: MIT
+  project: ball_detection-qei8i
+  url: https://universe.roboflow.com/objectdetection-dsy2y/ball_detection-qei8i/dataset/3
+  version: 3
+  workspace: objectdetection-dsy2y
+test: test/images
+train: train/images
+val: valid/images
