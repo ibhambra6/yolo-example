@@ -19,8 +19,8 @@ from visca_over_ip import Camera
 from collections import deque
 
 ### ------------------- USER CONFIG -------------------
-CAMERA_IP   = "192.168.0.13"       #  X1 address
-NDI_NAME    = "CAM2"         #  NDI stream name advertised by the camera
+CAMERA_IP   = "192.168.0.7"       #  X1 address
+NDI_NAME    = "CAM1"         #  NDI stream name advertised by the camera
 VISCA_PORT  = 52381                   #  fixed for BirdDog/Sony VISCA-IP
 MODEL_PATH  = "best.pt"               #  your trained YOLO model (YOLOv5 or YOLOv8)
 TRACK_CLASS = 4                       #  class-id you want to track (4 = "5M Assem")
@@ -1027,9 +1027,53 @@ def ndi_frames(source_name:str):
         ndi.recv_free_video_v2(recv, video_frame)
 
 # --------------------------------------------------------------------------- #
-# 3. Main loop – detection ➜ PTZ correction
+# 3. Main loop – detection ➜ PTZ correction with enhanced UI
 # --------------------------------------------------------------------------- #
+
+# Global variables for window control
+window_should_close = False
+close_button_rect = None
+
+def mouse_callback(event, x, y, flags, param):
+    """Handle mouse events in the tracking window."""
+    global window_should_close, close_button_rect
+    
+    if event == cv2.EVENT_LBUTTONUP and close_button_rect:
+        # Check if click is within close button area
+        btn_x, btn_y, btn_w, btn_h = close_button_rect
+        if btn_x <= x <= btn_x + btn_w and btn_y <= y <= btn_y + btn_h:
+            print("🔴 Close button clicked - stopping tracking...")
+            window_should_close = True
+
+def draw_close_button(frame):
+    """Draw a close button on the frame and return its coordinates."""
+    global close_button_rect
+    
+    h, w = frame.shape[:2]
+    
+    # Close button dimensions and position (top-right corner)
+    btn_w, btn_h = 80, 30
+    btn_x = w - btn_w - 10
+    btn_y = 10
+    
+    close_button_rect = (btn_x, btn_y, btn_w, btn_h)
+    
+    # Draw button background
+    cv2.rectangle(frame, (btn_x, btn_y), (btn_x + btn_w, btn_y + btn_h), (0, 0, 200), -1)  # Red background
+    cv2.rectangle(frame, (btn_x, btn_y), (btn_x + btn_w, btn_y + btn_h), (255, 255, 255), 2)  # White border
+    
+    # Draw "CLOSE" text
+    text = "CLOSE"
+    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+    text_x = btn_x + (btn_w - text_size[0]) // 2
+    text_y = btn_y + (btn_h + text_size[1]) // 2
+    cv2.putText(frame, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    return frame
+
 def track():
+    global window_should_close
+    
     detector, model_type = load_model(MODEL_PATH)
     cam = X1Visca()
     movement_controller = SmoothMovementController()
@@ -1054,6 +1098,10 @@ def track():
     print(f"📺 Video settings:")
     print(f"   - NDI source: {NDI_NAME}")
     print(f"   - Camera IP: {CAMERA_IP}")
+    print(f"🖱️  Window controls:")
+    print(f"   - Click 'CLOSE' button in window to exit")
+    print(f"   - Press ESC or Q to quit")
+    print(f"   - Click X on window title bar to close")
     
     frame_count = 0
     last_detection_time = time.time()
@@ -1061,225 +1109,276 @@ def track():
     
     # Pose estimation initialization flag
     pose_initialized = False
+    window_created = False
     
-    for frame in ndi_frames(NDI_NAME):
-        h, w, _ = frame.shape
-        frame_count += 1
-        tracking_performance["total_frames"] += 1
-        current_time = time.time()
-        
-        # Initialize pose estimation on first frame
-        if ENABLE_POSE_ESTIMATION and not pose_initialized and object_3d_tracker:
-            object_3d_tracker.initialize(w, h)
-            pose_initialized = True
-        
-        # run detector (no tracker → lowest latency)
-        results = detect_objects(detector, frame, model_type)
-        boxes  = [b for b in results if int(b.cls[0] if hasattr(b, 'cls') else b.cls)==TRACK_CLASS]
-        
-        if not boxes:
-            # No target detected - gradually stop movement
-            pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(0, 0)
-            if should_move:
-                cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
+    try:
+        for frame in ndi_frames(NDI_NAME):
+            if window_should_close:
+                break
+                
+            h, w, _ = frame.shape
+            frame_count += 1
+            tracking_performance["total_frames"] += 1
+            current_time = time.time()
+            
+            # Create window and set mouse callback on first frame
+            if not window_created:
+                cv2.namedWindow("BirdTrack", cv2.WINDOW_NORMAL)
+                cv2.setMouseCallback("BirdTrack", mouse_callback)
+                cv2.resizeWindow("BirdTrack", 1200, 800)  # Set a good default size
+                window_created = True
+                print("🖼️  Tracking window created - click CLOSE button to exit")
+            
+            # Initialize pose estimation on first frame
+            if ENABLE_POSE_ESTIMATION and not pose_initialized and object_3d_tracker:
+                object_3d_tracker.initialize(w, h)
+                pose_initialized = True
+            
+            # run detector (no tracker → lowest latency)
+            results = detect_objects(detector, frame, model_type)
+            boxes  = [b for b in results if int(b.cls[0] if hasattr(b, 'cls') else b.cls)==TRACK_CLASS]
+            
+            if not boxes:
+                # No target detected - gradually stop movement
+                pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(0, 0)
+                if should_move:
+                    cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
+                else:
+                    cam.stop()
+                    movement_controller.stop()
+                
+                # Show "searching" status
+                cv2.putText(frame, "SEARCHING FOR TARGET...", (10,30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+                cv2.putText(frame, f"Frame: {frame_count} | Detection rate: {tracking_performance['detected_frames']/max(1,tracking_performance['total_frames'])*100:.1f}%", (10,60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+                
+                # Draw close button
+                frame = draw_close_button(frame)
+                
+                cv2.imshow("BirdTrack", frame)
+                
+                # Check for key press or window close
+                key = cv2.waitKey(1) & 0xFF
+                if key in (27, ord('q')):  # ESC or Q key
+                    break
+                
+                # Check if window was closed via X button
+                if cv2.getWindowProperty("BirdTrack", cv2.WND_PROP_VISIBLE) < 1:
+                    break
+                    
+                continue
+                
+            # Target detected - update detection time and stats
+            last_detection_time = time.time()
+            tracking_performance["detected_frames"] += 1
+            
+            # pick the highest-confidence box
+            box = max(boxes, key=lambda b: float(b.conf[0] if hasattr(b, 'conf') and hasattr(b.conf, '__getitem__') else b.conf))
+            
+            # Extract coordinates - handle both YOLOv5 and YOLOv8 formats
+            if hasattr(box.xyxy[0], '__getitem__'):
+                x0,y0,x1,y1 = map(int, box.xyxy[0])
             else:
-                cam.stop()
-                movement_controller.stop()
+                x0,y0,x1,y1 = map(int, box.xyxy)
+                
+            cx, cy = (x0+x1)//2, (y0+y1)//2
+            # normalised offset from centre (-1 … +1)
+            off_x, off_y = ( (cx - w/2)/(w/2), (cy - h/2)/(h/2) )
             
-            # Show "searching" status
-            cv2.putText(frame, "SEARCHING FOR TARGET...", (10,30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
-            cv2.putText(frame, f"Frame: {frame_count} | Detection rate: {tracking_performance['detected_frames']/max(1,tracking_performance['total_frames'])*100:.1f}%", (10,60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+            # Get confidence for display
+            conf_value = float(box.conf[0] if hasattr(box.conf, '__getitem__') else box.conf)
             
-            cv2.imshow("BirdTrack", frame); cv2.waitKey(1)
-            continue
+            # 3D pose estimation and tracking
+            tracking_info = None
+            predicted_position = None
             
-        # Target detected - update detection time and stats
-        last_detection_time = time.time()
-        tracking_performance["detected_frames"] += 1
-        
-        # pick the highest-confidence box
-        box = max(boxes, key=lambda b: float(b.conf[0] if hasattr(b, 'conf') and hasattr(b.conf, '__getitem__') else b.conf))
-        
-        # Extract coordinates - handle both YOLOv5 and YOLOv8 formats
-        if hasattr(box.xyxy[0], '__getitem__'):
-            x0,y0,x1,y1 = map(int, box.xyxy[0])
-        else:
-            x0,y0,x1,y1 = map(int, box.xyxy)
-            
-        cx, cy = (x0+x1)//2, (y0+y1)//2
-        # normalised offset from centre (-1 … +1)
-        off_x, off_y = ( (cx - w/2)/(w/2), (cy - h/2)/(h/2) )
-        
-        # Get confidence for display
-        conf_value = float(box.conf[0] if hasattr(box.conf, '__getitem__') else box.conf)
-        
-        # 3D pose estimation and tracking
-        tracking_info = None
-        predicted_position = None
-        
-        if ENABLE_POSE_ESTIMATION and object_3d_tracker and pose_initialized:
-            # Get current camera angles for pose estimation
-            pan_angle, tilt_angle = movement_controller.get_camera_angles()
-            
-            # Update 3D tracking
-            tracking_info = object_3d_tracker.update_tracking(
-                (x0, y0, x1, y1), current_time, pan_angle, tilt_angle
-            )
-            
-            # Get motion prediction
-            if ENABLE_PREDICTIVE_TRACKING and tracking_info:
-                predicted_position = object_3d_tracker.predict_future_position(
-                    movement_controller.prediction_lookahead
+            if ENABLE_POSE_ESTIMATION and object_3d_tracker and pose_initialized:
+                # Get current camera angles for pose estimation
+                pan_angle, tilt_angle = movement_controller.get_camera_angles()
+                
+                # Update 3D tracking
+                tracking_info = object_3d_tracker.update_tracking(
+                    (x0, y0, x1, y1), current_time, pan_angle, tilt_angle
                 )
-        
-        # Use enhanced movement controller with 3D information
-        if tracking_info:
-            result = movement_controller.get_enhanced_movement(
-                off_x, off_y, tracking_info, predicted_position
-            )
-            pan_speed, tilt_speed, pan_dir, tilt_dir, should_move, debug_info = result
-        else:
-            # Fallback to basic movement
-            pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(off_x, off_y)
-            debug_info = {}
-        
-        # Enhanced movement logic with improved deadband handling
-        horizontal_deadband = DEADBAND
-        vertical_deadband = DEADBAND * VERTICAL_DEADBAND_MULTIPLIER
-        is_horizontally_centered = abs(off_x) < horizontal_deadband
-        is_vertically_centered = abs(off_y) < vertical_deadband
-        is_centered = is_horizontally_centered and is_vertically_centered
-        
-        if is_centered:
-            tracking_performance["centered_frames"] += 1
-            # Object is centered - gradually stop movement
-            pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(0, 0)
-            if not should_move:
-                cam.stop()
-                movement_controller.stop()
+                
+                # Get motion prediction
+                if ENABLE_PREDICTIVE_TRACKING and tracking_info:
+                    predicted_position = object_3d_tracker.predict_future_position(
+                        movement_controller.prediction_lookahead
+                    )
+            
+            # Use enhanced movement controller with 3D information
+            if tracking_info:
+                result = movement_controller.get_enhanced_movement(
+                    off_x, off_y, tracking_info, predicted_position
+                )
+                pan_speed, tilt_speed, pan_dir, tilt_dir, should_move, debug_info = result
             else:
-                # Still decelerating
-                cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
-        else:
-            # Object needs tracking - use calculated movement
-            if should_move:
-                cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
+                # Fallback to basic movement
+                pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(off_x, off_y)
+                debug_info = {}
+            
+            # Enhanced movement logic with improved deadband handling
+            horizontal_deadband = DEADBAND
+            vertical_deadband = DEADBAND * VERTICAL_DEADBAND_MULTIPLIER
+            is_horizontally_centered = abs(off_x) < horizontal_deadband
+            is_vertically_centered = abs(off_y) < vertical_deadband
+            is_centered = is_horizontally_centered and is_vertically_centered
+            
+            if is_centered:
+                tracking_performance["centered_frames"] += 1
+                # Object is centered - gradually stop movement
+                pan_speed, tilt_speed, pan_dir, tilt_dir, should_move = movement_controller.get_smooth_movement(0, 0)
+                if not should_move:
+                    cam.stop()
+                    movement_controller.stop()
+                else:
+                    # Still decelerating
+                    cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
             else:
-                # Object detected but movement too small - stop for stability
-                cam.stop()
-        
-        # Enhanced HUD with 3D tracking info
-        cv2.circle(frame, (cx,cy), 8, (0,255,0), 2)
-        cv2.line(frame, (w//2, h//2), (cx,cy), (0,255,0), 2)
-        cv2.rectangle(frame, (x0,y0), (x1,y1), (255,0,0), 2)
-        
-        # Draw center crosshairs and deadband zones (if visualization enabled)
-        if ENABLE_MOVEMENT_VISUALIZATION:
-            cv2.line(frame, (w//2-20, h//2), (w//2+20, h//2), (255,255,255), 1)
-            cv2.line(frame, (w//2, h//2-20), (w//2, h//2+20), (255,255,255), 1)
+                # Object needs tracking - use calculated movement
+                if should_move:
+                    cam.move(pan_speed, tilt_speed, pan_dir, tilt_dir)
+                else:
+                    # Object detected but movement too small - stop for stability
+                    cam.stop()
             
-            # Draw separate deadband zones for horizontal and vertical
-            h_deadband_w = int(horizontal_deadband * w/2)
-            v_deadband_h = int(vertical_deadband * h/2)
+            # Enhanced HUD with 3D tracking info
+            cv2.circle(frame, (cx,cy), 8, (0,255,0), 2)
+            cv2.line(frame, (w//2, h//2), (cx,cy), (0,255,0), 2)
+            cv2.rectangle(frame, (x0,y0), (x1,y1), (255,0,0), 2)
             
-            # Horizontal deadband (pan)
-            cv2.rectangle(frame, 
-                         (w//2 - h_deadband_w, h//2 - 10), 
-                         (w//2 + h_deadband_w, h//2 + 10), 
-                         (128,128,255), 1)  # Blue for horizontal
+            # Draw center crosshairs and deadband zones (if visualization enabled)
+            if ENABLE_MOVEMENT_VISUALIZATION:
+                cv2.line(frame, (w//2-20, h//2), (w//2+20, h//2), (255,255,255), 1)
+                cv2.line(frame, (w//2, h//2-20), (w//2, h//2+20), (255,255,255), 1)
+                
+                # Draw separate deadband zones for horizontal and vertical
+                h_deadband_w = int(horizontal_deadband * w/2)
+                v_deadband_h = int(vertical_deadband * h/2)
+                
+                # Horizontal deadband (pan)
+                cv2.rectangle(frame, 
+                             (w//2 - h_deadband_w, h//2 - 10), 
+                             (w//2 + h_deadband_w, h//2 + 10), 
+                             (128,128,255), 1)  # Blue for horizontal
+                
+                # Vertical deadband (tilt) 
+                cv2.rectangle(frame, 
+                             (w//2 - 10, h//2 - v_deadband_h), 
+                             (w//2 + 10, h//2 + v_deadband_h), 
+                             (255,128,128), 1)  # Red for vertical
+                
+                # Draw movement vector
+                if should_move and (pan_dir or tilt_dir):
+                    vector_length = 50
+                    end_x = w//2 + int(off_x * vector_length)
+                    end_y = h//2 + int(off_y * vector_length)
+                    cv2.arrowedLine(frame, (w//2, h//2), (end_x, end_y), (255,0,255), 2)
+                
+                # Draw prediction vector if available
+                if ENABLE_PREDICTIVE_TRACKING and predicted_position is not None and tracking_info:
+                    if debug_info.get('prediction_used'):
+                        cv2.circle(frame, (cx, cy), 12, (255,255,0), 2)  # Yellow circle for prediction
+                
+                # Show stability status
+                stability_text = f"H:{'✓' if is_horizontally_centered else '✗'} V:{'✓' if is_vertically_centered else '✗'}"
+                cv2.putText(frame, stability_text, (w-200, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
             
-            # Vertical deadband (tilt) 
-            cv2.rectangle(frame, 
-                         (w//2 - 10, h//2 - v_deadband_h), 
-                         (w//2 + 10, h//2 + v_deadband_h), 
-                         (255,128,128), 1)  # Red for vertical
-            
-            # Draw movement vector
-            if should_move and (pan_dir or tilt_dir):
-                vector_length = 50
-                end_x = w//2 + int(off_x * vector_length)
-                end_y = h//2 + int(off_y * vector_length)
-                cv2.arrowedLine(frame, (w//2, h//2), (end_x, end_y), (255,0,255), 2)
-            
-            # Draw prediction vector if available
-            if ENABLE_PREDICTIVE_TRACKING and predicted_position is not None and tracking_info:
-                if debug_info.get('prediction_used'):
-                    cv2.circle(frame, (cx, cy), 12, (255,255,0), 2)  # Yellow circle for prediction
-            
-            # Show stability status
-            stability_text = f"H:{'✓' if is_horizontally_centered else '✗'} V:{'✓' if is_vertically_centered else '✗'}"
-            cv2.putText(frame, stability_text, (w-150, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
-        
-        # Enhanced pose visualization
-        if ENABLE_POSE_VISUALIZATION and tracking_info:
-            pose_y_offset = 180
-            distance_mm = tracking_info.get('distance_mm', 0)
-            position_3d = tracking_info.get('3d_position')
-            velocity = tracking_info.get('velocity')
-            confidence = tracking_info.get('confidence', 0)
-            
-            # Distance and 3D position
-            cv2.putText(frame, f"Distance: {distance_mm:.0f}mm ({distance_mm/1000:.2f}m)", (10, pose_y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 1)
-            
-            if position_3d is not None:
-                cv2.putText(frame, f"3D Pos: X{position_3d[0]:.0f} Y{position_3d[1]:.0f} Z{position_3d[2]:.0f}mm", (10, pose_y_offset + 20),
+            # Enhanced pose visualization
+            if ENABLE_POSE_VISUALIZATION and tracking_info:
+                pose_y_offset = 200
+                distance_mm = tracking_info.get('distance_mm', 0)
+                position_3d = tracking_info.get('3d_position')
+                velocity = tracking_info.get('velocity')
+                confidence = tracking_info.get('confidence', 0)
+                
+                # Distance and 3D position
+                cv2.putText(frame, f"Distance: {distance_mm:.0f}mm ({distance_mm/1000:.2f}m)", (10, pose_y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 1)
+                
+                if position_3d is not None:
+                    cv2.putText(frame, f"3D Pos: X{position_3d[0]:.0f} Y{position_3d[1]:.0f} Z{position_3d[2]:.0f}mm", (10, pose_y_offset + 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 1)
+                
+                if velocity is not None:
+                    vel_magnitude = np.linalg.norm(velocity)
+                    cv2.putText(frame, f"Velocity: {vel_magnitude:.1f}mm/s", (10, pose_y_offset + 40),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 1)
+                
+                # Confidence indicators
+                cv2.putText(frame, f"3D Confidence: {confidence:.2f}", (10, pose_y_offset + 60),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 1)
-            
-            if velocity is not None:
-                vel_magnitude = np.linalg.norm(velocity)
-                cv2.putText(frame, f"Velocity: {vel_magnitude:.1f}mm/s", (10, pose_y_offset + 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 1)
-            
-            # Confidence indicators
-            cv2.putText(frame, f"3D Confidence: {confidence:.2f}", (10, pose_y_offset + 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 1)
-            
-            # Camera pose
-            pan_angle, tilt_angle = movement_controller.get_camera_angles()
-            cv2.putText(frame, f"Cam: Pan{pan_angle:.1f}° Tilt{tilt_angle:.1f}°", (10, pose_y_offset + 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
-        
-        # Status display with better information
-        status_color = (0,255,0) if is_centered else (255,255,0)
-        status_text = "CENTERED" if is_centered else "TRACKING"
-        
-        # Calculate performance metrics
-        detection_rate = tracking_performance["detected_frames"] / max(1, tracking_performance["total_frames"]) * 100
-        center_rate = tracking_performance["centered_frames"] / max(1, tracking_performance["detected_frames"]) * 100
-        
-        cv2.putText(frame, f"TARGET: {status_text}", (10,30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
-        
-        if ENABLE_TRACKING_DEBUG:
-            cv2.putText(frame, f"Offset: X{off_x:+.3f} Y{off_y:+.3f} | Conf: {conf_value:.2f}", (10,60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-            cv2.putText(frame, f"Movement: P{pan_speed}({pan_dir}) T{tilt_speed}({tilt_dir}) | Active: {should_move}", (10,90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
-            cv2.putText(frame, f"Position: ({cx},{cy}) | H-DB: ±{horizontal_deadband:.3f} V-DB: ±{vertical_deadband:.3f}", (10,120),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-            
-            # Enhanced movement debugging
-            if tracking_info and debug_info:
-                movement_analysis = debug_info.get('movement_analysis', {})
-                cv2.putText(frame, f"Thresholds: Pan±{movement_analysis.get('pan_threshold', 0):.3f} Tilt±{movement_analysis.get('tilt_threshold', 0):.3f}", (10,140),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
-                cv2.putText(frame, f"Needs Move: Pan:{movement_analysis.get('pan_needs_movement', False)} Tilt:{movement_analysis.get('tilt_needs_movement', False)}", (10,160),
+                
+                # Camera pose
+                pan_angle, tilt_angle = movement_controller.get_camera_angles()
+                cv2.putText(frame, f"Cam: Pan{pan_angle:.1f}° Tilt{tilt_angle:.1f}°", (10, pose_y_offset + 80),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
             
-            cv2.putText(frame, f"Performance: Det:{detection_rate:.1f}% Ctr:{center_rate:.1f}% | Frame: {frame_count}", (10,180),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-        else:
-            cv2.putText(frame, f"Conf: {conf_value:.2f} | Det: {detection_rate:.1f}% | Stability: H{'✓' if is_horizontally_centered else '✗'} V{'✓' if is_vertically_centered else '✗'} | Frame: {frame_count}", (10,60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+            # Status display with better information
+            status_color = (0,255,0) if is_centered else (255,255,0)
+            status_text = "CENTERED" if is_centered else "TRACKING"
+            
+            # Calculate performance metrics
+            detection_rate = tracking_performance["detected_frames"] / max(1, tracking_performance["total_frames"]) * 100
+            center_rate = tracking_performance["centered_frames"] / max(1, tracking_performance["detected_frames"]) * 100
+            
+            cv2.putText(frame, f"TARGET: {status_text}", (10,30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
+            
+            if ENABLE_TRACKING_DEBUG:
+                cv2.putText(frame, f"Offset: X{off_x:+.3f} Y{off_y:+.3f} | Conf: {conf_value:.2f}", (10,60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                cv2.putText(frame, f"Movement: P{pan_speed}({pan_dir}) T{tilt_speed}({tilt_dir}) | Active: {should_move}", (10,90),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+                cv2.putText(frame, f"Position: ({cx},{cy}) | H-DB: ±{horizontal_deadband:.3f} V-DB: ±{vertical_deadband:.3f}", (10,120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+                
+                # Enhanced movement debugging
+                if tracking_info and debug_info:
+                    movement_analysis = debug_info.get('movement_analysis', {})
+                    cv2.putText(frame, f"Thresholds: Pan±{movement_analysis.get('pan_threshold', 0):.3f} Tilt±{movement_analysis.get('tilt_threshold', 0):.3f}", (10,140),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
+                    cv2.putText(frame, f"Needs Move: Pan:{movement_analysis.get('pan_needs_movement', False)} Tilt:{movement_analysis.get('tilt_needs_movement', False)}", (10,160),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
+                
+                cv2.putText(frame, f"Performance: Det:{detection_rate:.1f}% Ctr:{center_rate:.1f}% | Frame: {frame_count}", (10,180),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+            else:
+                cv2.putText(frame, f"Conf: {conf_value:.2f} | Det: {detection_rate:.1f}% | Stability: H{'✓' if is_horizontally_centered else '✗'} V{'✓' if is_vertically_centered else '✗'} | Frame: {frame_count}", (10,60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
 
-        cv2.imshow("BirdTrack", frame)
-        if cv2.waitKey(1) in (27, ord('q')):
-            break
+            # Draw close button (always visible)
+            frame = draw_close_button(frame)
+            
+            cv2.imshow("BirdTrack", frame)
+            
+            # Check for key press or window close
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord('q')):  # ESC or Q key
+                break
+            
+            # Check if window was closed via X button
+            if cv2.getWindowProperty("BirdTrack", cv2.WND_PROP_VISIBLE) < 1:
+                break
 
-    cv2.destroyAllWindows()
+    except KeyboardInterrupt:
+        print("\n🛑 Tracking interrupted by user")
+    except Exception as e:
+        print(f"❌ Tracking error: {e}")
+    finally:
+        # Cleanup
+        print("🧹 Cleaning up...")
+        try:
+            cam.stop()
+            print("🏁 Camera stopped")
+        except:
+            pass
+        
+        cv2.destroyAllWindows()
+        window_should_close = False  # Reset for next run
+        print("🖼️  Window closed successfully")
 
 def test_tracking_movements():
     """Test function to verify camera movement directions, speeds, and pose estimation."""

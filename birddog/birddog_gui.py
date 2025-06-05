@@ -23,8 +23,8 @@ import NDIlib as ndi
 from birddog import X1Visca, ndi_frames
 
 ### ------------------- GUI CONFIG -------------------
-CAMERA_IP   = "192.168.0.13"       # X1 address
-NDI_NAME    = "CAM2"         # NDI stream name
+CAMERA_IP   = "192.168.0.7"       # X1 address
+NDI_NAME    = "CAM1"         # NDI stream name
 VISCA_PORT  = 52381                   # VISCA-IP port
 WINDOW_WIDTH = 800                    # GUI window width (reduced since no video)
 WINDOW_HEIGHT = 600                   # GUI window height (reduced since no video)
